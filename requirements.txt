@@ -1,0 +1,6 @@
+Flask==2.1.0
+Flask-SocketIO==5.2.0
+eventlet==0.33.0
+boto3==1.28.82
+python-engineio==4.3.4
+python-socketio==5.8.0
