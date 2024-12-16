@@ -125,7 +125,6 @@
         }
     </style>
 </head>
-
 <body>
     <div class="container">
         <div class="header">
@@ -134,70 +133,73 @@
 
         <div class="online-users">
             <h3>Online Users</h3>
-            <ul class="user-list" id="user-list">
-                <!-- Online users will be dynamically added here -->
-            </ul>
+            <ul class="user-list" id="user-list"></ul>
         </div>
 
         <div class="chat-section">
             <h3>Chat</h3>
-            <div class="chat-box" id="messages">
-                <!-- Chat messages will appear here -->
-            </div>
+            <div class="chat-box" id="messages"></div>
             <div class="chat-input">
-                <textarea id="message" placeholder="Type your message..." disabled></textarea>
-                <button id="send" disabled>Send</button>
+                <textarea id="message" placeholder="Type your message..."></textarea>
+                <button id="send">Send</button>
             </div>
         </div>
     </div>
 
     <script>
-        const socket = io();
-
-        const userList = document.getElementById("user-list");
-        const messagesDiv = document.getElementById("messages");
-        const messageInput = document.getElementById("message");
-        const sendButton = document.getElementById("send");
-
+        const username = prompt("Enter your username:");
+        const apiUrl = "http://127.0.0.1:5000";
         let currentRoom = null;
-        let username = null;
 
-        function updateUIForConnected() {
-            document.querySelector(".chat-input textarea").disabled = false;
-            document.querySelector(".chat-input button").disabled = false;
-        }
-
-        function updateUIForDisconnected() {
-            document.querySelector(".chat-input textarea").disabled = true;
-            document.querySelector(".chat-input button").disabled = true;
-        }
-
-        document.addEventListener("DOMContentLoaded", () => {
-            const connectButton = document.createElement("button");
-            connectButton.textContent = "Connect";
-            connectButton.style.margin = "10px auto";
-            connectButton.style.display = "block";
-            connectButton.style.padding = "10px 15px";
-            connectButton.style.backgroundColor = "#4caf50";
-            connectButton.style.color = "#fff";
-            connectButton.style.border = "none";
-            connectButton.style.borderRadius = "5px";
-            connectButton.style.cursor = "pointer";
-            connectButton.style.fontSize = "1rem";
-
-            document.querySelector(".header").appendChild(connectButton);
-
-            connectButton.addEventListener("click", () => {
-                username = prompt("Enter your username:");
-                if (username) {
-                    socket.emit("register", { username });
-                    connectButton.remove();
-                    updateUIForConnected();
-                }
+        async function registerUser() {
+            const response = await fetch(`${apiUrl}/register`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username }),
             });
-        });
+            const data = await response.json();
+            if (data.status === "success") {
+                updateOnlineUsers(data.online_users);
+            }
+        }
 
-        socket.on("user_list", (users) => {
+        async function fetchOnlineUsers() {
+            const response = await fetch(`${apiUrl}/get_online_users`);
+            const data = await response.json();
+            if (data.status === "success") {
+                updateOnlineUsers(data.online_users);
+            }
+        }
+
+        async function fetchMessages() {
+            if (currentRoom) {
+                const response = await fetch(`${apiUrl}/fetch_messages?room=${currentRoom}`);
+                const data = await response.json();
+                if (data.status === "success") {
+                    displayMessages(data.messages);
+                }
+            }
+        }
+
+        async function sendMessage() {
+            const message = document.getElementById("message").value.trim();
+            if (message && currentRoom) {
+                await fetch(`${apiUrl}/send_message`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        sender: username,
+                        receiver: currentRoom.replace(username, "").replace("-", ""),
+                        message,
+                    }),
+                });
+                document.getElementById("message").value = "";
+                fetchMessages();
+            }
+        }
+
+        function updateOnlineUsers(users) {
+            const userList = document.getElementById("user-list");
             userList.innerHTML = "";
             users.forEach((user) => {
                 if (user !== username) {
@@ -210,33 +212,29 @@
                     userList.appendChild(li);
                 }
             });
-        });
-
-        function startChat(receiver) {
-            socket.emit("start_chat", { sender: username, receiver });
         }
 
-        socket.on("chat_started", (data) => {
-            currentRoom = data.room;
-            messagesDiv.innerHTML = ""; // Clear previous chat
-        });
+        function startChat(receiver) {
+            currentRoom = username < receiver ? `${username}-${receiver}` : `${receiver}-${username}`;
+            fetchMessages();
+        }
 
-        sendButton.addEventListener("click", () => {
-            const message = messageInput.value.trim();
-            if (message && currentRoom) {
-                socket.emit("message", { username, room: currentRoom, message });
-                messageInput.value = "";
-            }
-        });
+        function displayMessages(messages) {
+            const messagesDiv = document.getElementById("messages");
+            messagesDiv.innerHTML = "";
+            messages.forEach((msg) => {
+                const div = document.createElement("div");
+                div.textContent = `${msg.sender}: ${msg.message}`;
+                messagesDiv.appendChild(div);
+            });
+        }
 
-        socket.on("message", (msg) => {
-            const div = document.createElement("div");
-            div.className = "message";
-            div.textContent = msg;
-            messagesDiv.appendChild(div);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        });
+        document.getElementById("send").addEventListener("click", sendMessage);
+
+        // Initial setup
+        registerUser();
+        setInterval(fetchOnlineUsers, 5000); // Poll for online users every 5 seconds
+        setInterval(fetchMessages, 3000);    // Poll for messages every 3 seconds
     </script>
 </body>
-
 </html>
