@@ -1,14 +1,11 @@
 import boto3
-from flask import Flask, render_template, request ,send_from_directory
-from flask_socketio import SocketIO, join_room, leave_room, send, emit
-import threading
+from flask import Flask, request, jsonify, render_template
+from threading import Lock
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "your_secret_key"
-socketio = SocketIO(app, cors_allowed_origins="*")
 
 # AWS SQS Configuration
-sqs_client= boto3.client(
+sqs_client = boto3.client(
     "sqs",
     region_name="eu-north-1",
     aws_access_key_id='AKIAWMFUPNPZFR6X5BMY',
@@ -16,87 +13,70 @@ sqs_client= boto3.client(
 )
 QUEUE_URL = "https://sqs.eu-north-1.amazonaws.com/438465162226/User1_User2_Queue"
 
-# In-memory storage for user management
-online_users = {}  # {username: sid (socket id)}
-active_rooms = {}  # {room_name: [user1, user2]}
-user_room_map = {}  # {username: room_name}
-
+# In-memory storage
+messages = []  # List to store messages for polling
+online_users = set()  # Store online users
+lock = Lock()
 
 @app.route("/")
 def serve_frontend():
     return render_template("index.html")
 
 
-@socketio.on("connect")
-def on_connect():
-    print("A user connected.")
-
-
-@socketio.on("disconnect")
-def on_disconnect():
-    username = None
-    for user, sid in online_users.items():
-        if sid == request.sid:
-            username = user
-            break
-
+@app.route("/register", methods=["POST"])
+def register_user():
+    username = request.json.get("username")
     if username:
-        online_users.pop(username)
-        room = user_room_map.get(username)
-        if room:
-            active_rooms[room].remove(username)
-            if not active_rooms[room]:  # If room is empty, delete it
-                del active_rooms[room]
-            del user_room_map[username]
-        emit("user_list", list(online_users.keys()), broadcast=True)
-        print(f"{username} disconnected.")
+        with lock:
+            online_users.add(username)
+        return jsonify({"status": "success", "online_users": list(online_users)}), 200
+    return jsonify({"status": "error", "message": "Invalid username"}), 400
 
 
-@socketio.on("register")
-def register_user(data):
-    username = data["username"]
-    online_users[username] = request.sid
-    emit("user_list", list(online_users.keys()), broadcast=True)
+@app.route("/send_message", methods=["POST"])
+def send_message():
+    sender = request.json.get("sender")
+    receiver = request.json.get("receiver")
+    message = request.json.get("message")
 
+    if sender and receiver and message:
+        room = f"{sender}-{receiver}" if sender < receiver else f"{receiver}-{sender}"
 
-@socketio.on("start_chat")
-def start_chat(data):
-    sender = data["sender"]
-    receiver = data["receiver"]
-    room = f"{sender}-{receiver}" if sender < receiver else f"{receiver}-{sender}"
+        # Store the message in memory
+        with lock:
+            messages.append({"room": room, "sender": sender, "message": message})
 
-    if room not in active_rooms:
-        active_rooms[room] = [sender, receiver]
-        user_room_map[sender] = room
-        user_room_map[receiver] = room
-
-    join_room(room)
-    emit("chat_started", {"room": room, "users": [sender, receiver]}, to=request.sid)
-    emit("chat_started", {"room": room, "users": [sender, receiver]}, to=online_users[receiver])
-
-
-@socketio.on("message")
-def handle_message(data):
-    username = data["username"]
-    room = user_room_map.get(username)
-    message = data["message"]
-
-    if room:
-        # Send message to SQS
+        # Optional: Send the message to SQS
         sqs_client.send_message(
             QueueUrl=QUEUE_URL,
             MessageBody=message,
             MessageAttributes={
                 "room": {"DataType": "String", "StringValue": room},
-                "username": {"DataType": "String", "StringValue": username},
+                "sender": {"DataType": "String", "StringValue": sender},
             },
         )
-        # Broadcast message
-        send(f"{username}: {message}", to=room)
+        return jsonify({"status": "success"}), 200
 
-# Start background thread for SQS polling
-# threading.Thread(target=receive_sqs_messages, daemon=True).start()
+    return jsonify({"status": "error", "message": "Invalid data"}), 400
+
+
+@app.route("/fetch_messages", methods=["GET"])
+def fetch_messages():
+    room = request.args.get("room")
+    if not room:
+        return jsonify({"status": "error", "message": "Room not specified"}), 400
+
+    with lock:
+        # Get messages for the requested room
+        room_messages = [msg for msg in messages if msg["room"] == room]
+
+    return jsonify({"status": "success", "messages": room_messages}), 200
+
+
+@app.route("/get_online_users", methods=["GET"])
+def get_online_users():
+    return jsonify({"status": "success", "online_users": list(online_users)}), 200
+
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=8080)
-
+    app.run(debug=True)
