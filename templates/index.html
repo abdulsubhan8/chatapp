@@ -231,8 +231,11 @@
 
         // Initial setup
         registerUser();
-        setInterval(fetchOnlineUsers, 5000); // Poll for online users every 5 seconds
-        setInterval(fetchMessages, 3000);    // Poll for messages every 3 seconds
+        setInterval(fetchOnlineUsers, 5000); // Poll every 5 seconds
+setInterval(() => {
+    if (currentRoom) fetchMessages();
+}, 3000); // Poll messages only if a chat is active
+
     </script>
 </body>
 </html>
