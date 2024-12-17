@@ -148,122 +148,155 @@
     </div>
 
     <script>
-        const username = prompt("Enter your username:").trim();
-        const apiUrl = "https://chatapp-git-master-abdulsubhan8s-projects.vercel.app/";
-        let currentRoom = null;
-        let onlineUsersCache = [];
-        let messagesCache = {};
+    const username = prompt("Enter your username:").trim();
+    const apiUrl = "https://chatapp-git-master-abdulsubhan8s-projects.vercel.app/";
+    let currentRoom = null;
+    let onlineUsersCache = [];
+    let messagesCache = {};
 
-        async function registerUser() {
-            try {
-                const response = await fetch(`${apiUrl}/register`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ username }),
-                });
-                const data = await response.json();
-                if (data.status === "success") {
+    // Register the user
+    async function registerUser() {
+        try {
+            const response = await fetch(`${apiUrl}/register`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username }),
+            });
+            const data = await response.json();
+            if (data.status === "success") {
+                console.log("User registered:", username);
+                onlineUsersCache = data.online_users;
+                updateOnlineUsers(onlineUsersCache);
+            } else {
+                console.error("Registration failed:", data);
+            }
+        } catch (error) {
+            console.error("Error registering user:", error);
+        }
+    }
+
+    // Fetch online users
+    async function fetchOnlineUsers() {
+        try {
+            const response = await fetch(`${apiUrl}/get_online_users`);
+            const data = await response.json();
+            if (data.status === "success") {
+                if (JSON.stringify(data.online_users) !== JSON.stringify(onlineUsersCache)) {
                     onlineUsersCache = data.online_users;
                     updateOnlineUsers(onlineUsersCache);
                 }
-            } catch (error) {
-                console.error("Error registering user:", error);
+            } else {
+                console.error("Failed to fetch online users:", data);
             }
+        } catch (error) {
+            console.error("Error fetching online users:", error);
         }
+    }
 
-        async function fetchOnlineUsers() {
-            try {
-                const response = await fetch(`${apiUrl}/get_online_users`);
-                const data = await response.json();
-                if (data.status === "success") {
-                    onlineUsersCache = data.online_users;
-                    updateOnlineUsers(onlineUsersCache);
-                }
-            } catch (error) {
-                console.error("Error fetching online users:", error);
-            }
-        }
-
-        async function fetchMessages() {
-            if (!currentRoom) return;
-            try {
-                const response = await fetch(`${apiUrl}/fetch_messages?room=${currentRoom}`);
-                const data = await response.json();
-                if (data.status === "success") {
+    // Fetch messages for the current room
+    async function fetchMessages() {
+        if (!currentRoom) return;
+        try {
+            const response = await fetch(`${apiUrl}/fetch_messages?room=${currentRoom}`);
+            const data = await response.json();
+            if (data.status === "success") {
+                if (JSON.stringify(data.messages) !== JSON.stringify(messagesCache[currentRoom])) {
                     messagesCache[currentRoom] = data.messages;
                     displayMessages(data.messages);
                 }
-            } catch (error) {
-                console.error("Error fetching messages:", error);
+            } else {
+                console.error("Failed to fetch messages:", data);
             }
+        } catch (error) {
+            console.error("Error fetching messages:", error);
         }
+    }
 
-        async function sendMessage() {
-            const message = document.getElementById("message").value.trim();
-            if (!message || !currentRoom) return;
+    // Send a message to the current room
+    async function sendMessage() {
+        const message = document.getElementById("message").value.trim();
+        if (!message || !currentRoom) return;
 
-            try {
-                const receiver = currentRoom.replace(username, "").replace("-", "");
-                await fetch(`${apiUrl}/send_message`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ sender: username, receiver, message }),
-                });
+        try {
+            const receiver = currentRoom.replace(username, "").replace("-", "");
+            const response = await fetch(`${apiUrl}/send_message`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sender: username, receiver, message }),
+            });
+            const data = await response.json();
+            if (data.status === "success") {
+                console.log("Message sent:", message);
                 document.getElementById("message").value = "";
                 fetchMessages(); // Refresh messages after sending
-            } catch (error) {
-                console.error("Error sending message:", error);
-            }
-        }
-
-        function updateOnlineUsers(users) {
-            const userList = document.getElementById("user-list");
-            userList.innerHTML = ""; // Clear the user list before updating
-
-            users.forEach((user) => {
-                if (user !== username) {
-                    const li = document.createElement("li");
-                    li.textContent = user;
-                    const chatButton = document.createElement("button");
-                    chatButton.textContent = "Chat";
-                    chatButton.addEventListener("click", () => startChat(user));
-                    li.appendChild(chatButton);
-                    userList.appendChild(li);
-                }
-            });
-        }
-
-        function startChat(receiver) {
-            const newRoom = username < receiver ? `${username}-${receiver}` : `${receiver}-${username}`;
-            if (currentRoom === newRoom) return; // Avoid resetting the same chat
-
-            currentRoom = newRoom;
-            if (messagesCache[currentRoom]) {
-                displayMessages(messagesCache[currentRoom]); // Use cached messages
             } else {
-                fetchMessages(); // Fetch messages if not cached
+                console.error("Failed to send message:", data);
             }
+        } catch (error) {
+            console.error("Error sending message:", error);
         }
+    }
 
-        function displayMessages(messages) {
-            const messagesDiv = document.getElementById("messages");
-            messagesDiv.innerHTML = ""; // Clear previous messages
-            messages.forEach((msg) => {
-                const div = document.createElement("div");
-                div.textContent = `${msg.sender}: ${msg.message}`;
-                div.classList.add("message");
-                messagesDiv.appendChild(div);
-            });
-            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll to the latest message
+    // Update the online users list
+    function updateOnlineUsers(users) {
+        const userList = document.getElementById("user-list");
+        userList.innerHTML = ""; // Clear the user list before updating
+
+        users.forEach((user) => {
+            if (user !== username) {
+                const li = document.createElement("li");
+                li.textContent = user;
+
+                const chatButton = document.createElement("button");
+                chatButton.textContent = "Chat";
+                chatButton.addEventListener("click", () => startChat(user));
+
+                li.appendChild(chatButton);
+                userList.appendChild(li);
+            }
+        });
+    }
+
+    // Start a chat with a user
+    function startChat(receiver) {
+        const newRoom = username < receiver ? `${username}-${receiver}` : `${receiver}-${username}`;
+        if (currentRoom === newRoom) return; // Avoid resetting the same chat
+
+        currentRoom = newRoom;
+        console.log("Switched to room:", currentRoom);
+
+        if (messagesCache[currentRoom]) {
+            displayMessages(messagesCache[currentRoom]); // Use cached messages
+        } else {
+            fetchMessages(); // Fetch messages if not cached
         }
+    }
 
-        // Event listeners
-        document.getElementById("send").addEventListener("click", sendMessage);
+    // Display messages in the chat box
+    function displayMessages(messages) {
+        const messagesDiv = document.getElementById("messages");
+        messagesDiv.innerHTML = ""; // Clear previous messages
 
-        // Initialize app
-        registerUser();
-        setInterval(fetchOnlineUsers, 5000); // Refresh online users every 5 seconds
-        setInterval(fetchMessages, 3000); // Refresh messages every 3 seconds if in a chat
-    </script>
+        messages.forEach((msg) => {
+            const div = document.createElement("div");
+            div.textContent = `${msg.sender}: ${msg.message}`;
+            div.classList.add("message");
+            messagesDiv.appendChild(div);
+        });
+
+        messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll to the latest message
+    }
+
+    // Event listeners
+    document.getElementById("send").addEventListener("click", sendMessage);
+
+    // Initialize the app
+    registerUser();
+    setInterval(fetchOnlineUsers, 2000); // Refresh online users every 2 seconds
+    setInterval(() => {
+        if (currentRoom) fetchMessages();
+    }, 2000); // Refresh messages every 2 seconds if in a chat
+</script>
+
 </body>
 </html>
