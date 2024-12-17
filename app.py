@@ -35,6 +35,7 @@ def index():
 
 
 @app.route("/register", methods=["POST"])
+#Addition of user in online users
 def register_user():
     username = request.json.get("username")
     if username:
