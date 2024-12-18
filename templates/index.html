@@ -146,13 +146,12 @@
             </div>
         </div>
     </div>
-
-    <script>
-    const username = prompt("Enter your username:").trim();
+<scripts>
+        const username = prompt("Enter your username:").trim();
     const apiUrl = "https://chatapp-git-master-abdulsubhan8s-projects.vercel.app/";
     let currentRoom = null;
     let onlineUsersCache = [];
-    let messagesCache = {};
+    let localChatStorage = {}; // Dictionary to store chats locally
 
     // Register the user
     async function registerUser() {
@@ -200,10 +199,12 @@
             const response = await fetch(`${apiUrl}/fetch_messages?room=${currentRoom}`);
             const data = await response.json();
             if (data.status === "success") {
-                if (JSON.stringify(data.messages) !== JSON.stringify(messagesCache[currentRoom])) {
-                    messagesCache[currentRoom] = data.messages;
-                    displayMessages(data.messages);
-                }
+                const roomMessages = data.messages;
+
+                // Save messages to local storage
+                localChatStorage[currentRoom] = roomMessages;
+
+                displayMessages(roomMessages);
             } else {
                 console.error("Failed to fetch messages:", data);
             }
@@ -227,8 +228,15 @@
             const data = await response.json();
             if (data.status === "success") {
                 console.log("Message sent:", message);
+
+                // Add the message to local storage
+                if (!localChatStorage[currentRoom]) {
+                    localChatStorage[currentRoom] = [];
+                }
+                localChatStorage[currentRoom].push({ sender: username, message });
+
                 document.getElementById("message").value = "";
-                fetchMessages(); // Refresh messages after sending
+                displayMessages(localChatStorage[currentRoom]); // Update the chat display
             } else {
                 console.error("Failed to send message:", data);
             }
@@ -265,10 +273,11 @@
         currentRoom = newRoom;
         console.log("Switched to room:", currentRoom);
 
-        if (messagesCache[currentRoom]) {
-            displayMessages(messagesCache[currentRoom]); // Use cached messages
+        // Check if chat exists in local storage
+        if (localChatStorage[currentRoom]) {
+            displayMessages(localChatStorage[currentRoom]); // Use cached messages
         } else {
-            fetchMessages(); // Fetch messages if not cached
+            fetchMessages(); // Fetch messages from the server if not cached
         }
     }
 
@@ -296,7 +305,7 @@
     setInterval(() => {
         if (currentRoom) fetchMessages();
     }, 2000); // Refresh messages every 2 seconds if in a chat
-</script>
+        </scripts>
 
 </body>
 </html>
