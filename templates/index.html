@@ -156,11 +156,11 @@
 const username = prompt("Enter your username:").trim();
 const apiUrl = "https://chatapp-git-master-abdulsubhan8s-projects.vercel.app/";
 let currentRoom = null;
-let onlineUsersCache = [];
-let localChatStorage = {}; // Dictionary to store chats locally
-let startedChats = new Set(); // To keep track of users with initiated chats
+let onlineUsersCache = new Set(); // Cache of online users
+let startedChats = new Set(); // Track initiated chats
+let localChatStorage = {}; // Store messages locally
 
-// Register the user
+// Register the user and fetch the initial user list
 async function registerUser() {
     try {
         const response = await fetch(`${apiUrl}/register`, {
@@ -171,8 +171,8 @@ async function registerUser() {
         const data = await response.json();
         if (data.status === "success") {
             console.log("User registered:", username);
-            onlineUsersCache = data.online_users;
-            updateOnlineUsers(onlineUsersCache);
+            onlineUsersCache = new Set(data.online_users); // Initialize the cache with online users
+            updateOnlineUsersDisplay();
         } else {
             console.error("Registration failed:", data);
         }
@@ -181,15 +181,22 @@ async function registerUser() {
     }
 }
 
-// Fetch online users
+// Periodically fetch and update the list of online users
 async function fetchOnlineUsers() {
     try {
         const response = await fetch(`${apiUrl}/get_online_users`);
         const data = await response.json();
         if (data.status === "success") {
-            if (JSON.stringify(data.online_users) !== JSON.stringify(onlineUsersCache)) {
-                onlineUsersCache = data.online_users;
-                updateOnlineUsers(onlineUsersCache);
+            const fetchedUsers = new Set(data.online_users);
+            const newUsers = Array.from(fetchedUsers).filter(user => !onlineUsersCache.has(user));
+
+            // Update the cache
+            newUsers.forEach(user => onlineUsersCache.add(user));
+
+            // If new users are detected, update the UI
+            if (newUsers.length > 0) {
+                console.log("New users detected:", newUsers);
+                updateOnlineUsersDisplay();
             }
         } else {
             console.error("Failed to fetch online users:", data);
@@ -199,7 +206,7 @@ async function fetchOnlineUsers() {
     }
 }
 
-// Fetch messages for the current room and append new messages only
+// Fetch messages for the current room
 async function fetchMessages() {
     if (!currentRoom) return;
     try {
@@ -208,32 +215,16 @@ async function fetchMessages() {
         if (data.status === "success") {
             const roomMessages = data.messages;
 
-            // Only append new messages to the chat
-            const cachedMessages = localChatStorage[currentRoom] || [];
-            const newMessages = roomMessages.slice(cachedMessages.length);
+            // Save messages to local storage
+            localChatStorage[currentRoom] = roomMessages;
 
-            if (newMessages.length > 0) {
-                localChatStorage[currentRoom] = roomMessages; // Update cache
-                appendMessages(newMessages);
-            }
+            displayMessages(roomMessages);
         } else {
             console.error("Failed to fetch messages:", data);
         }
     } catch (error) {
         console.error("Error fetching messages:", error);
     }
-}
-
-// Append new messages to the chat box
-function appendMessages(messages) {
-    const messagesDiv = document.getElementById("messages");
-    messages.forEach((msg) => {
-        const div = document.createElement("div");
-        div.textContent = `${msg.sender}: ${msg.message}`;
-        div.classList.add("message");
-        messagesDiv.appendChild(div);
-    });
-    messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll to the latest message
 }
 
 // Send a message to the current room
@@ -260,10 +251,10 @@ async function sendMessage() {
 
             // Add user to started chats
             startedChats.add(receiver);
-            updateStartedChats();
+            updateStartedChatsDisplay();
 
             document.getElementById("message").value = "";
-            appendMessages([{ sender: username, message }]); // Append the new message
+            displayMessages(localChatStorage[currentRoom]); // Update the chat display
         } else {
             console.error("Failed to send message:", data);
         }
@@ -272,12 +263,12 @@ async function sendMessage() {
     }
 }
 
-// Update the online users list
-function updateOnlineUsers(users) {
+// Update the online users list in the frontend
+function updateOnlineUsersDisplay() {
     const userList = document.getElementById("user-list");
-    userList.innerHTML = ""; // Clear the user list before updating
+    userList.innerHTML = ""; // Clear the existing list
 
-    users.forEach((user) => {
+    Array.from(onlineUsersCache).forEach(user => {
         if (user !== username) {
             const li = document.createElement("li");
             li.textContent = user;
@@ -290,14 +281,16 @@ function updateOnlineUsers(users) {
             userList.appendChild(li);
         }
     });
+
+    console.log("Online users updated on the frontend.");
 }
 
-// Update the started chats list
-function updateStartedChats() {
+// Update the started chats list in the frontend
+function updateStartedChatsDisplay() {
     const startedChatsList = document.getElementById("started-chats-list");
     startedChatsList.innerHTML = ""; // Clear the list before updating
 
-    startedChats.forEach((chatUser) => {
+    startedChats.forEach(chatUser => {
         const li = document.createElement("li");
         li.textContent = chatUser;
 
@@ -320,26 +313,39 @@ function startChat(receiver) {
 
     // Add user to started chats
     startedChats.add(receiver);
-    updateStartedChats();
+    updateStartedChatsDisplay();
 
     // Check if chat exists in local storage
     if (localChatStorage[currentRoom]) {
-        appendMessages(localChatStorage[currentRoom]); // Use cached messages
+        displayMessages(localChatStorage[currentRoom]); // Use cached messages
     } else {
         fetchMessages(); // Fetch messages from the server if not cached
     }
 }
 
-// Event listeners
-document.getElementById("send").addEventListener("click", sendMessage);
+// Display messages in the chat box
+function displayMessages(messages) {
+    const messagesDiv = document.getElementById("messages");
+    messagesDiv.innerHTML = ""; // Clear previous messages
+
+    messages.forEach(msg => {
+        const div = document.createElement("div");
+        div.textContent = `${msg.sender}: ${msg.message}`;
+        div.classList.add("message");
+        messagesDiv.appendChild(div);
+    });
+
+    messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll to the latest message
+}
 
 // Initialize the app
 registerUser();
-setInterval(fetchOnlineUsers, 5000); // Fetch online users every 5 seconds
+setInterval(fetchOnlineUsers, 1000); // Check for new users every 5 seconds
 setInterval(() => {
-    if (currentRoom) fetchMessages();
-}, 3000); // Fetch messages every 3 seconds if in a chat
+    if (currentRoom) fetchMessages(); // Refresh messages if in a chat
+}, 1000);
 </script>
+
 
 
 </body>
