@@ -159,6 +159,7 @@ let currentRoom = null;
 let onlineUsersCache = new Set(); // Cache of online users
 let startedChats = new Set(); // Track initiated chats
 let localChatStorage = {}; // Store messages locally
+let fetchingMessages = false; // Prevent overlapping fetch calls
 
 // Register the user and fetch the initial user list
 async function registerUser() {
@@ -193,7 +194,7 @@ async function fetchOnlineUsers() {
             // Update the cache
             newUsers.forEach(user => onlineUsersCache.add(user));
 
-            // If new users are detected, update the UI
+            // Only update the UI if there are new users
             if (newUsers.length > 0) {
                 console.log("New users detected:", newUsers);
                 updateOnlineUsersDisplay();
@@ -208,7 +209,8 @@ async function fetchOnlineUsers() {
 
 // Fetch messages for the current room
 async function fetchMessages() {
-    if (!currentRoom) return;
+    if (!currentRoom || fetchingMessages) return;
+    fetchingMessages = true; // Prevent multiple fetch calls
     try {
         const response = await fetch(`${apiUrl}/fetch_messages?room=${currentRoom}`);
         const data = await response.json();
@@ -224,6 +226,8 @@ async function fetchMessages() {
         }
     } catch (error) {
         console.error("Error fetching messages:", error);
+    } finally {
+        fetchingMessages = false;
     }
 }
 
@@ -351,6 +355,7 @@ setInterval(() => {
 // Event listener for sending messages
 document.getElementById("send").addEventListener("click", sendMessage);
 </script>
+
 
 
 
