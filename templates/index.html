@@ -160,6 +160,7 @@ let onlineUsersCache = new Set(); // Cache of online users
 let startedChats = new Set(); // Track initiated chats
 let localChatStorage = {}; // Store messages locally for each room
 let fetchingMessages = false; // Prevent overlapping fetch calls
+let lastMessageCount = 0; // Track the number of messages in the current room
 
 // Register the user and fetch the initial user list
 async function registerUser() {
@@ -209,25 +210,30 @@ async function fetchOnlineUsers() {
 
 // Fetch messages for the current room
 async function fetchMessages() {
-    if (!currentRoom || fetchingMessages) return;
-    fetchingMessages = true; // Prevent multiple fetch calls
+    if (!currentRoom || fetchingMessages) return;  // Prevent multiple fetch calls or refresh if no current room
+    fetchingMessages = true;  // Prevent multiple fetch calls
+
     try {
         const response = await fetch(`${apiUrl}/fetch_messages?room=${currentRoom}`);
         const data = await response.json();
         if (data.status === "success") {
             const roomMessages = data.messages;
+            if (roomMessages.length > lastMessageCount) {
+                // There are new messages, update chat
+                lastMessageCount = roomMessages.length;
 
-            // Save messages to local storage
-            localChatStorage[currentRoom] = roomMessages;
+                // Save messages to local storage
+                localChatStorage[currentRoom] = roomMessages;
 
-            displayMessages(roomMessages);
+                displayMessages(roomMessages); // Display the new messages
+            }
         } else {
             console.error("Failed to fetch messages:", data);
         }
     } catch (error) {
         console.error("Error fetching messages:", error);
     } finally {
-        fetchingMessages = false;
+        fetchingMessages = false;  // Reset flag
     }
 }
 
@@ -350,12 +356,13 @@ function displayMessages(messages) {
 registerUser();
 setInterval(fetchOnlineUsers, 5000); // Check for new users every 5 seconds
 setInterval(() => {
-    if (currentRoom) fetchMessages(); // Refresh messages if in a chat
+    if (currentRoom) fetchMessages(); // Refresh messages only if in a chat
 }, 3000);
 
 // Event listener for sending messages
 document.getElementById("send").addEventListener("click", sendMessage);
 </script>
+
 
 
 
