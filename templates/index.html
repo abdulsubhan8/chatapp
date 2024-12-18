@@ -230,7 +230,10 @@ async function fetchMessages() {
 // Send a message to the current room
 async function sendMessage() {
     const message = document.getElementById("message").value.trim();
-    if (!message || !currentRoom) return;
+    if (!message || !currentRoom) {
+        console.error("Message or current room is missing.");
+        return;
+    }
 
     try {
         const receiver = currentRoom.replace(username, "").replace("-", "");
@@ -340,11 +343,15 @@ function displayMessages(messages) {
 
 // Initialize the app
 registerUser();
-setInterval(fetchOnlineUsers, 1000); // Check for new users every 5 seconds
+setInterval(fetchOnlineUsers, 5000); // Check for new users every 5 seconds
 setInterval(() => {
     if (currentRoom) fetchMessages(); // Refresh messages if in a chat
 }, 2000);
+
+// Event listener for sending messages
+document.getElementById("send").addEventListener("click", sendMessage);
 </script>
+
 
 
 
