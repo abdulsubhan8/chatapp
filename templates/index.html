@@ -326,6 +326,7 @@ function startChat(receiver) {
     if (localChatStorage[currentRoom]) {
         displayMessages(localChatStorage[currentRoom]); // Use cached messages
     } else {
+        displayMessages([]); // Show empty chat while fetching
         fetchMessages(); // Fetch messages from the server if not cached
     }
 }
@@ -350,11 +351,12 @@ registerUser();
 setInterval(fetchOnlineUsers, 5000); // Check for new users every 5 seconds
 setInterval(() => {
     if (currentRoom) fetchMessages(); // Refresh messages if in a chat
-}, 2000);
+}, 3000);
 
 // Event listener for sending messages
 document.getElementById("send").addEventListener("click", sendMessage);
 </script>
+
 
 
 
