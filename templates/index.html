@@ -158,7 +158,7 @@ const apiUrl = "https://chatapp-git-master-abdulsubhan8s-projects.vercel.app/";
 let currentRoom = null;
 let onlineUsersCache = new Set(); // Cache of online users
 let startedChats = new Set(); // Track initiated chats
-let localChatStorage = {}; // Store messages locally
+let localChatStorage = {}; // Store messages locally for each room
 let fetchingMessages = false; // Prevent overlapping fetch calls
 
 // Register the user and fetch the initial user list
@@ -356,6 +356,7 @@ setInterval(() => {
 // Event listener for sending messages
 document.getElementById("send").addEventListener("click", sendMessage);
 </script>
+
 
 
 
